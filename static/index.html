@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Analyzer - PRO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4 font-sans">
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <div class="w-full max-w-2xl bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+        <div class="bg-slate-800 px-4 py-3 flex justify-between items-center">
+            <h1 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>🌐</span> Network Summary
+            </h1>
+            <span id="badge-status"
+                class="text-[10px] bg-blue-900 text-white px-2 py-0.5 rounded font-mono transition-colors">Pronto</span>
+        </div>
+
+        <div class="p-3">
+            <div class="flex gap-2 mb-3 items-center">
+                <div
+                    class="flex-1 flex border border-slate-300 rounded overflow-hidden focus-within:ring-2 focus-within:ring-slate-400 transition-all">
+                    <input type="text" id="input-ip" placeholder="Indirizzo IP (es. 192.168.1.1)"
+                        class="w-full text-xs px-3 py-1.5 focus:outline-none">
+                    <div
+                        class="bg-slate-100 border-l border-slate-300 flex items-center px-2 text-[10px] font-bold text-slate-500">
+                        /</div>
+                    <input type="number" id="input-cidr" placeholder="24" min="0" max="32"
+                        class="w-16 text-xs px-2 py-1.5 focus:outline-none">
+                </div>
+                <button onclick="avviaCalcolo()"
+                    class="bg-blue-600 text-white text-[11px] px-4 py-1.5 rounded hover:bg-blue-700 transition-colors font-bold uppercase tracking-wider">
+                    Calcola
+                </button>
+            </div>
+
+            <div id="status-area"
+                class="text-center py-2 text-slate-400 text-[10px] border border-dashed border-slate-200 rounded">
+                Inserisci IP e CIDR per l'analisi
+            </div>
+
+            <div id="results-container" class="hidden">
+                <div id="results" class="flex flex-wrap gap-2 mb-3"> </div>
+
+                <button onclick="copiaRisultati()"
+                    class="w-full bg-slate-50 hover:bg-slate-100 text-slate-500 text-[10px] font-bold py-1.5 rounded flex items-center justify-center gap-2 border border-slate-200 transition-colors">
+                    <span>📋</span> Copia Riepilogo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let datiAttuali = null;
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-emerald-600' : 'bg-red-600';
+
+            toast.className = `${bgColor} text-white px-4 py-2 rounded-lg shadow-xl text-sm font-medium animate-bounce-in flex items-center transition-opacity duration-300`;
+            toast.innerHTML = `<span>${message}</span>`;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 1000);
+            }, 3000);
+        }
+
+        function resetInterfaccia() {
+            const statusArea = document.getElementById('status-area');
+            const resContainer = document.getElementById('results-container');
+            const badge = document.getElementById('badge-status');
+
+            badge.innerText = "Pronto";
+            badge.className = "text-[10px] bg-blue-900 text-white px-2 py-0.5 rounded font-mono transition-colors";
+
+            resContainer.classList.add('hidden');
+            statusArea.classList.remove('hidden');
+            statusArea.innerHTML = "Inserisci IP e CIDR per l'analisi";
+            datiAttuali = null;
+        }
+
+        async function fetchAnalysis(ip, cidr) {
+            const resDiv = document.getElementById('results');
+            const resContainer = document.getElementById('results-container');
+            const statusArea = document.getElementById('status-area');
+            const badge = document.getElementById('badge-status');
+
+            try {
+                const response = await fetch(`/api/calculate?ip=${ip}&cidr=${cidr}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    datiAttuali = data.result;
+                    statusArea.classList.add('hidden');
+                    resContainer.classList.remove('hidden');
+
+                    badge.innerText = `${ip}/${cidr}`;
+                    badge.className = "text-[10px] bg-blue-900 text-white px-2 py-0.5 rounded font-mono transition-colors";
+
+                    resDiv.innerHTML = Object.entries(data.result).map(([key, value]) => {
+                        const isCidr = key.toLowerCase() === 'cidr';
+                        const flexClass = isCidr ? 'w-16 flex-none' : 'flex-1 min-w-[140px]';
+                        return `
+                            <div class="bg-slate-50 p-2 rounded border border-slate-100 ${flexClass}">
+                                <dt class="text-[9px] uppercase text-slate-500 font-extrabold leading-none mb-1.5 whitespace-nowrap">${key}</dt>
+                                <dd class="font-mono text-[11px] text-slate-900 font-semibold">${value}</dd>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    resetInterfaccia();
+                    showToast(data.error, "error");
+                }
+            } catch (e) {
+                resetInterfaccia();
+                showToast("Errore di connessione al server", "error");
+            }
+        }
+
+        function avviaCalcolo() {
+            const ip = document.getElementById('input-ip').value;
+            const cidr = document.getElementById('input-cidr').value;
+            if (ip && cidr) fetchAnalysis(ip, cidr);
+            else showToast("Compila entrambi i campi", "error");
+        }
+
+        function copiaRisultati() {
+            if (!datiAttuali) return;
+            const testo = Object.entries(datiAttuali)
+                .map(([k, v]) => `${k}: ${v}`).join('\n');
+            navigator.clipboard.writeText(testo);
+            showToast("Copiato negli appunti!");
+        }
+
+        window.onload = () => {
+            document.getElementById('input-ip').focus();
+
+            const params = new URLSearchParams(window.location.search);
+            const ip = params.get('ip');
+            const cidr = params.get('cidr');
+
+            if (ip && cidr) {
+                document.getElementById('input-ip').value = ip;
+                document.getElementById('input-cidr').value = cidr;
+                fetchAnalysis(ip, cidr);
+            }
+        };
+
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') avviaCalcolo();
+        });
+    </script>
+
+    <style>
+        @keyframes bounce-in {
+            0% {
+                transform: translateX(100%);
+            }
+
+            70% {
+                transform: translateX(-10%);
+            }
+
+            100% {
+                transform: translateX(0);
+            }
+        }
+
+        .animate-bounce-in {
+            animation: bounce-in 0.4s ease-out;
+        }
+    </style>
+</body>
+
+</html>
