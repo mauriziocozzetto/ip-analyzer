@@ -1,49 +1,43 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi import FastAPI
 import ipaddress
+from fastapi.responses import FileResponse
 
 app = FastAPI()
 
 
-@app.get("/api/{ip}/{cidr}")
-def calculate_network(ip: str, cidr: int):
-    try:
-        # Ricostruiamo la stringa dell'interfaccia
-        interface_str = f"{ip}/{cidr}"
-        interfaccia = ipaddress.IPv4Interface(interface_str)
-        rete = interfaccia.network
-
-        return {
-            "success": True,
-            "result": {
-                "Indirizzo di rete": str(rete.network_address),
-                "Indirizzo di broadcast": str(rete.broadcast_address),
-                "Maschera di sottorete": str(rete.netmask),
-                "CIDR": f"/{rete.prefixlen}",
-                "Primo indirizzo utile": str(rete.network_address + 1) if rete.num_addresses > 2 else "N/A",
-                "Ultimo indirizzo utile": str(rete.broadcast_address - 1) if rete.num_addresses > 2 else "N/A",
-                "Host utilizzabili": rete.num_addresses - 2 if rete.num_addresses > 2 else 0
-            }
-        }
-    except (ipaddress.AddressValueError, ipaddress.NetmaskValueError) as e:
-        return {"success": False, "error": f"Dati non validi: {e}"}
-    except Exception as e:
-        return {"success": False, "error": f"Errore imprevisto: {str(e)}"}
-
-
-@app.get("/api/calculate")
-def calculate_network_query(ip: str, cidr: int):
-    return calculate_network(ip, cidr)
-
-
 @app.get("/")
 def read_index():
-    return FileResponse('static/index.html')
+    return FileResponse("index.html")
 
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+def get_network_details(ip: str, prefix: int):
+    # Validazione immediata del prefisso
+    if not (2 <= prefix <= 30):
+        return {"stato": "insuccesso", "messaggio": "Il prefisso deve essere compreso tra 2 e 30."}
 
-# if __name__ == "__main__":
-#    import uvicorn
-#    uvicorn.run(app, host="127.0.0.1", port=8000)
+    try:
+        # strict=False gestisce IP non allineati alla rete (es. .5/24 -> .0/24)
+        rete = ipaddress.ip_network(f"{ip}/{prefix}", strict=False)
+
+        return {
+            "stato": "successo",
+            "dati": {
+                "indirizzo_rete": str(rete.network_address),
+                "subnet_mask": str(rete.netmask),
+                "primo_ip_utile": str(rete[1]),
+                "ultimo_ip_utile": str(rete[-2]),
+                "indirizzo_broadcast": str(rete.broadcast_address)
+            }
+        }
+    except Exception as e:
+        return {"stato": "insuccesso", "messaggio": f"Dati non validi: {str(e)}"}
+
+# Unificato: Gestisce sia /networks/1.1.1.1/24 che /networks?ip=1.1.1.1&prefix=24
+
+
+@app.get("/networks/{ip}/{prefix}")
+@app.get("/networks")
+def read_network(ip: str = None, prefix: int = None):
+    if ip is None or prefix is None:
+        return {"stato": "insuccesso", "messaggio": "IP e prefisso sono obbligatori."}
+    return get_network_details(ip, prefix)
