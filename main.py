@@ -11,12 +11,10 @@ def read_index():
 
 
 def get_network_details(ip: str, prefix: int):
-    # Validazione immediata del prefisso
     if not (2 <= prefix <= 30):
         return {"stato": "insuccesso", "messaggio": "Il prefisso deve essere compreso tra 2 e 30."}
 
     try:
-        # strict=False gestisce IP non allineati alla rete (es. .5/24 -> .0/24)
         rete = ipaddress.ip_network(f"{ip}/{prefix}", strict=False)
 
         return {
@@ -26,7 +24,8 @@ def get_network_details(ip: str, prefix: int):
                 "subnet_mask": str(rete.netmask),
                 "primo_ip_utile": str(rete[1]),
                 "ultimo_ip_utile": str(rete[-2]),
-                "indirizzo_broadcast": str(rete.broadcast_address)
+                "indirizzo_broadcast": str(rete.broadcast_address),
+                "num_host": rete.num_addresses - 2  # <--- Calcolo host utili
             }
         }
     except Exception as e:
