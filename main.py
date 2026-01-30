@@ -22,9 +22,9 @@ def get_network_details(ip: str, prefix: int):
             "dati": {
                 "indirizzo_rete": str(rete.network_address),
                 "subnet_mask": str(rete.netmask),
-                "primo_ip_utile": str(rete[1]),
-                "ultimo_ip_utile": str(rete[-2]),
+                "primo_ip_utile": str(rete.network_address + 1),
                 "indirizzo_broadcast": str(rete.broadcast_address),
+                "ultimo_ip_utile": str(rete.broadcast_address - 1),
                 "num_host": rete.num_addresses - 2  # <--- Calcolo host utili
             }
         }
